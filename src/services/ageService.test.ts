@@ -67,15 +67,28 @@ describe('calcAge 周次划分', () => {
   it('第 21 天 = 第 4 周', () => {
     expect(calcAge(birth, '2025-02-22').week).toBe(4)
   })
-  it('第 27 天（下一月龄前一天）= 第 4 周', () => {
+  it('第 27 天 = 第 4 周', () => {
     expect(calcAge(birth, '2025-02-28').week).toBe(4)
+  })
+  it('第 28 天 = 第 5 周', () => {
+    // 出生 1月1日，1月29日 = 0 月龄第 28 天
+    expect(calcAge(birth, '2025-01-29')).toEqual({ monthAge: 0, week: 5, dayInMonthAge: 28 })
+  })
+  it('31 天月龄的最后一天（第 30 天）= 第 5 周', () => {
+    const age = calcAge(birth, '2025-01-31')
+    expect(age).toEqual({ monthAge: 0, week: 5, dayInMonthAge: 30 })
+  })
+  it('28 天的月龄没有第 5 周：第 27 天后直接进入下一月龄', () => {
+    expect(calcAge('2025-02-01', '2025-02-28')).toEqual({ monthAge: 0, week: 4, dayInMonthAge: 27 })
+    expect(calcAge('2025-02-01', '2025-03-01')).toEqual({ monthAge: 1, week: 1, dayInMonthAge: 0 })
   })
   it('出生当天：月龄 0、第 1 周', () => {
     expect(calcAge(birth, '2025-01-01')).toEqual({ monthAge: 0, week: 1, dayInMonthAge: 0 })
   })
-  it('跨不同天数月份：1月31日出生，3月30日 = 1 月龄第 4 周', () => {
+  it('跨不同天数月份：1月31日出生，3月30日 = 1 月龄第 5 周', () => {
+    // 1 月龄自 2月28日（月末钳制）起算，3月30日为第 30 天
     const age = calcAge('2025-01-31', '2025-03-30')
     expect(age.monthAge).toBe(1)
-    expect(age.week).toBe(4)
+    expect(age.week).toBe(5)
   })
 })

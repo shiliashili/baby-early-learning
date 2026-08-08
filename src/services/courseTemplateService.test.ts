@@ -38,10 +38,15 @@ describe('validateCourseTemplate', () => {
     const r = validateCourseTemplate(JSON.stringify({ ...valid, plans: [] }))
     expect(r.ok).toBe(false)
   })
-  it('week 超出 1-4 报错', () => {
+  it('week 超出 1-5 报错', () => {
     const bad = structuredClone(valid)
-    bad.plans[0].week = 5
+    bad.plans[0].week = 6
     expect(validateCourseTemplate(JSON.stringify(bad)).ok).toBe(false)
+  })
+  it('week 为 5 合法（29-31 天的月龄存在第 5 周）', () => {
+    const t = structuredClone(valid)
+    t.plans[0].week = 5
+    expect(validateCourseTemplate(JSON.stringify(t)).ok).toBe(true)
   })
   it('monthAge 为负数报错', () => {
     const bad = structuredClone(valid)

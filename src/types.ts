@@ -13,7 +13,7 @@ export interface CoursePlan {
   id: string
   /** 适用的完整月龄，从 0 开始 */
   monthAge: number
-  /** 月龄内周次 1-4 */
+  /** 月龄内周次 1-5（第 5 周仅出现在 29-31 天的月龄） */
   week: number
   title: string
   version: number

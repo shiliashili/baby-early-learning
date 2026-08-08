@@ -4,14 +4,15 @@
  *
  * 规则：
  * - 完整月龄 = 出生日期到目标日期经过的整月数
- * - 每个月龄划分 4 周：进入月龄后第 0–6 天为第 1 周，7–13 天为第 2 周，
- *   14–20 天为第 3 周，21 天至下一月龄前一天为第 4 周
+ * - 每个月龄最多划分 5 周：进入月龄后第 0–6 天为第 1 周，7–13 天为第 2 周，
+ *   14–20 天为第 3 周，21–27 天为第 4 周；若该月龄超过 28 天，
+ *   第 28 天至下一月龄前一天为第 5 周（仅 29–31 天的月龄会出现）
  */
 
 export interface AgeInfo {
   /** 完整月龄，出生当天为 0 */
   monthAge: number
-  /** 当前月龄内周次 1-4 */
+  /** 当前月龄内周次 1-5 */
   week: number
   /** 进入当前月龄后的第几天（从 0 开始） */
   dayInMonthAge: number
@@ -75,7 +76,7 @@ export function calcAge(birthDate: string | Date, targetDate: string | Date = ne
     0,
     Math.floor((startOfDay(target).getTime() - startOfDay(monthStart).getTime()) / DAY_MS)
   )
-  const week = Math.min(4, Math.floor(dayInMonthAge / 7) + 1)
+  const week = Math.min(5, Math.floor(dayInMonthAge / 7) + 1)
 
   return { monthAge, week, dayInMonthAge }
 }

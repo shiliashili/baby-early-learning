@@ -196,6 +196,7 @@ onMounted(load)
             <option :value="2">第 2 周</option>
             <option :value="3">第 3 周</option>
             <option :value="4">第 4 周</option>
+            <option :value="5">第 5 周</option>
           </select>
         </div>
       </div>

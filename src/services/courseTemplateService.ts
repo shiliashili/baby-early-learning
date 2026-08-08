@@ -108,8 +108,8 @@ export function validateCourseTemplate(text: string): TemplateValidationResult {
       if (typeof p !== 'object' || p === null) return errors.push(`${prefix} 不是对象`)
       if (!Number.isInteger(p.monthAge) || (p.monthAge as number) < 0 || (p.monthAge as number) > 72)
         errors.push(`${prefix}.monthAge 必须是 0-72 的整数`)
-      if (!Number.isInteger(p.week) || (p.week as number) < 1 || (p.week as number) > 4)
-        errors.push(`${prefix}.week 必须是 1-4 的整数`)
+      if (!Number.isInteger(p.week) || (p.week as number) < 1 || (p.week as number) > 5)
+        errors.push(`${prefix}.week 必须是 1-5 的整数（第 5 周仅存在于 29-31 天的月龄）`)
       if (typeof p.title !== 'string' || !p.title.trim())
         errors.push(`${prefix}.title 不能为空`)
       if (!Array.isArray(p.tasks) || p.tasks.length === 0) {
