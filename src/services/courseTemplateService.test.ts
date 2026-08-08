@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { validateCourseTemplate, TEMPLATE_TYPE } from './courseTemplateService'
+import {
+  validateCourseTemplate, resolveTaskTitle, TEMPLATE_TYPE,
+} from './courseTemplateService'
 
 const valid = {
   type: TEMPLATE_TYPE,
@@ -53,10 +55,17 @@ describe('validateCourseTemplate', () => {
     bad.plans[0].monthAge = -1
     expect(validateCourseTemplate(JSON.stringify(bad)).ok).toBe(false)
   })
-  it('任务标题为空报错', () => {
-    const bad = structuredClone(valid)
-    bad.plans[0].tasks[0].title = '  '
-    expect(validateCourseTemplate(JSON.stringify(bad)).ok).toBe(false)
+  it('任务标题为空时合法（导入时自动从描述回填）', () => {
+    const t = structuredClone(valid)
+    t.plans[0].tasks[0].title = ''
+    expect(validateCourseTemplate(JSON.stringify(t)).ok).toBe(true)
+  })
+  it('任务 title 字段类型错误仍报错', () => {
+    const bad = structuredClone(valid) as { plans: Array<{ tasks: Array<{ title: unknown }> }> }
+    bad.plans[0].tasks[0].title = 123
+    const r = validateCourseTemplate(JSON.stringify(bad))
+    expect(r.ok).toBe(false)
+    expect(r.errors.join()).toContain('必须是字符串')
   })
   it('模板内重复计划报错', () => {
     const bad = structuredClone(valid)
@@ -69,5 +78,24 @@ describe('validateCourseTemplate', () => {
     const t = structuredClone(valid)
     delete (t.plans[0].tasks[0] as { sortOrder?: number }).sortOrder
     expect(validateCourseTemplate(JSON.stringify(t)).ok).toBe(true)
+  })
+})
+
+describe('resolveTaskTitle', () => {
+  it('原始标题非空时取原值', () => {
+    expect(resolveTaskTitle('  抓握  ', '描述', 1)).toBe('抓握')
+  })
+  it('原始标题为空、描述非空时用描述', () => {
+    expect(resolveTaskTitle('', '拼音第1节（上）：a', 1)).toBe('拼音第1节（上）：a')
+  })
+  it('描述过长时截断为 30 字 + …', () => {
+    const long = '一二三四五六七八九十'.repeat(5) // 50 字
+    const r = resolveTaskTitle('', long, 1)
+    expect(r.length).toBeLessThanOrEqual(31)
+    expect(r.endsWith('…')).toBe(true)
+  })
+  it('标题描述都为空时使用「任务 #N」', () => {
+    expect(resolveTaskTitle(undefined, undefined, 3)).toBe('任务 #3')
+    expect(resolveTaskTitle('', '   ', 7)).toBe('任务 #7')
   })
 })

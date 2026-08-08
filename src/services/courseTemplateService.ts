@@ -84,6 +84,18 @@ export interface TemplateValidationResult {
   template?: CourseTemplate
 }
 
+/**
+ * 派生任务标题：原始标题非空则取原值；否则优先用 description（截断），
+ * 都没有则用「任务 #N」占位。被去重比较和实际写入都会用到。
+ */
+export function resolveTaskTitle(rawTitle: string | undefined, description: string | undefined, fallbackIndex: number): string {
+  const t = (rawTitle ?? '').trim()
+  if (t) return t
+  const d = (description ?? '').trim()
+  if (d) return d.length > 30 ? d.slice(0, 30) + '…' : d
+  return `任务 #${fallbackIndex}`
+}
+
 /** 解析并校验课程模板，纯函数不写库 */
 export function validateCourseTemplate(text: string): TemplateValidationResult {
   let parsed: unknown
@@ -116,8 +128,10 @@ export function validateCourseTemplate(text: string): TemplateValidationResult {
         errors.push(`${prefix}.tasks 必须是非空数组`)
       } else {
         p.tasks.forEach((task, j) => {
-          if (typeof task?.title !== 'string' || !task.title.trim())
-            errors.push(`${prefix}.tasks[${j}].title 不能为空`)
+          // 任务标题允许为空字符串或缺失，导入时会自动从 description 回填；
+          // 这里仅在字段类型错误（不是字符串）时报错。
+          if (task?.title !== undefined && typeof task.title !== 'string')
+            errors.push(`${prefix}.tasks[${j}].title 必须是字符串`)
           if (task?.sortOrder !== undefined && typeof task.sortOrder !== 'number')
             errors.push(`${prefix}.tasks[${j}].sortOrder 必须是数字`)
         })
@@ -145,6 +159,8 @@ export interface CourseImportSummary {
   plansMerged: number
   tasksAdded: number
   tasksSkipped: number
+  /** 标题为空、被自动从 description 回填的任务数 */
+  titlesAutoFilled: number
 }
 
 /** 预览导入结果（只读，不写库） */
@@ -153,32 +169,35 @@ export async function previewCourseImport(template: CourseTemplate): Promise<Cou
   const planKey = (m: number, w: number, title: string) => `${m}|${w}|${title.trim()}`
   const planMap = new Map(existingPlans.map((p) => [planKey(p.monthAge, p.week, p.title), p]))
 
-  const summary: CourseImportSummary = { plansCreated: 0, plansMerged: 0, tasksAdded: 0, tasksSkipped: 0 }
+  const summary: CourseImportSummary = { plansCreated: 0, plansMerged: 0, tasksAdded: 0, tasksSkipped: 0, titlesAutoFilled: 0 }
   for (const tp of template.plans) {
     const existing = planMap.get(planKey(tp.monthAge, tp.week, tp.title))
-    if (!existing) {
-      summary.plansCreated++
-      summary.tasksAdded += tp.tasks.length
-    } else {
-      summary.plansMerged++
-      const existingTasks = await getTasksByPlan(existing.id)
-      const existingTitles = new Set(existingTasks.map((t) => t.title.trim()))
-      for (const tt of tp.tasks) {
-        existingTitles.has(tt.title.trim()) ? summary.tasksSkipped++ : summary.tasksAdded++
+    for (const [i, tt] of tp.tasks.entries()) {
+      if (!String(tt.title ?? '').trim()) summary.titlesAutoFilled++
+      const title = resolveTaskTitle(tt.title, tt.description, i + 1)
+      if (!existing) {
+        // 全新计划下，所有任务都会被新增
+        if (i === 0) summary.tasksAdded += tp.tasks.length
+      } else {
+        const existingTasks = await getTasksByPlan(existing.id)
+        const existingTitles = new Set(existingTasks.map((t) => t.title.trim()))
+        existingTitles.has(title) ? summary.tasksSkipped++ : summary.tasksAdded++
       }
     }
+    if (!existing) summary.plansCreated++
+    else summary.plansMerged++
   }
   return summary
 }
 
-/** 执行导入：去重合并写入 */
+/** 执行导入：去重合并写入；空标题任务自动从 description 回填 */
 export async function importCourseTemplate(template: CourseTemplate): Promise<CourseImportSummary> {
   const db = await openDB()
   const existingPlans = await getAll<CoursePlan>(db, STORES.coursePlan)
   const planKey = (m: number, w: number, title: string) => `${m}|${w}|${title.trim()}`
   const planMap = new Map(existingPlans.map((p) => [planKey(p.monthAge, p.week, p.title), p]))
 
-  const summary: CourseImportSummary = { plansCreated: 0, plansMerged: 0, tasksAdded: 0, tasksSkipped: 0 }
+  const summary: CourseImportSummary = { plansCreated: 0, plansMerged: 0, tasksAdded: 0, tasksSkipped: 0, titlesAutoFilled: 0 }
 
   for (const tp of template.plans) {
     let plan = planMap.get(planKey(tp.monthAge, tp.week, tp.title))
@@ -203,14 +222,16 @@ export async function importCourseTemplate(template: CourseTemplate): Promise<Co
     let nextOrder = existingTasks.reduce((max, t) => Math.max(max, t.sortOrder), 0)
 
     for (const [idx, tt] of tp.tasks.entries()) {
-      if (existingTitles.has(tt.title.trim())) {
+      const wasEmptyTitle = !String(tt.title ?? '').trim()
+      const finalTitle = resolveTaskTitle(tt.title, tt.description, idx + 1)
+      if (existingTitles.has(finalTitle)) {
         summary.tasksSkipped++
         continue
       }
       const task: CourseTask = {
         id: newId(),
         planId: plan.id,
-        title: tt.title.trim(),
+        title: finalTitle,
         description: tt.description?.trim() ?? '',
         sortOrder: typeof tt.sortOrder === 'number' ? tt.sortOrder : nextOrder + idx + 1,
       }
@@ -218,6 +239,7 @@ export async function importCourseTemplate(template: CourseTemplate): Promise<Co
       existingTitles.add(task.title)
       nextOrder = Math.max(nextOrder, task.sortOrder)
       summary.tasksAdded++
+      if (wasEmptyTitle) summary.titlesAutoFilled++
     }
   }
   return summary

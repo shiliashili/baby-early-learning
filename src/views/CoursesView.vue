@@ -121,9 +121,14 @@ async function onTemplateFile(e: Event) {
     }
     const summary = await previewCourseImport(result.template!)
     pendingTemplate.value = result.template!
-    previewText.value =
+    let preview =
       `将新建 ${summary.plansCreated} 个计划、合并进 ${summary.plansMerged} 个已有计划；` +
-      `新增 ${summary.tasksAdded} 个任务、跳过 ${summary.tasksSkipped} 个重复任务。\n\n确定导入吗？`
+      `新增 ${summary.tasksAdded} 个任务、跳过 ${summary.tasksSkipped} 个重复任务。`
+    if (summary.titlesAutoFilled > 0) {
+      preview += `\n\n注意：模板中有 ${summary.titlesAutoFilled} 个任务的 title 为空，已自动从 description 填充为标题，导入后可在「课程」页继续编辑。`
+    }
+    preview += `\n\n确定导入吗？`
+    previewText.value = preview
   } catch (err) {
     alert('导入失败：' + (err instanceof Error ? err.message : String(err)))
   } finally {
@@ -136,7 +141,7 @@ async function confirmImport() {
   if (!pendingTemplate.value) return
   const summary = await importCourseTemplate(pendingTemplate.value)
   pendingTemplate.value = null
-  toast(`导入完成：新建 ${summary.plansCreated} 计划，新增 ${summary.tasksAdded} 任务`)
+  toast(`导入完成：新建 ${summary.plansCreated} 计划，新增 ${summary.tasksAdded} 任务` + (summary.titlesAutoFilled ? `（自动填充 ${summary.titlesAutoFilled} 个标题）` : ''))
   await load()
 }
 
@@ -225,7 +230,8 @@ onMounted(load)
     <div v-if="!showPlanForm && !showTaskForm" class="card">
       <div style="font-weight:700;margin-bottom:8px">批量导入课程</div>
       <p class="text-secondary" style="margin-bottom:12px">
-        下载 JSON 模板，按月龄/周次填写计划与任务后导入。同月龄+周次+标题的已有计划只会补充缺失任务，不会重复创建。
+        下载 JSON 模板，按月龄/周次填写计划与任务后导入。同月龄+周次+标题的已有计划只会补充缺失任务，不会重复创建。<br />
+        任务 <code>title</code> 留空时，程序会自动用 <code>description</code> 填充为标题（用于去重和界面显示），导入后可在「课程」页编辑。
       </p>
       <div class="row">
         <button class="btn btn-secondary grow" @click="onDownloadTemplate">下载导入模板</button>
